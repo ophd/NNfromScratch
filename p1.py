@@ -1,3 +1,5 @@
+import numpy as np
+
 inputs = [1, 2, 3, 2.5]
 weights = [
             [0.2, 0.8, -0.5, 1.0],
@@ -7,9 +9,5 @@ weights = [
 
 biases = [2, 3, 0.5]
 
-outputs = [sum(i*w for i, w in zip(neuron_inputs, neuron_weights)) + neuron_bias 
-                for neuron_inputs, neuron_weights, neuron_bias in
-                    zip(len(weights)*[inputs], weights, biases)
-            ]
-
+outputs = np.dot(weights, inputs) + biases
 print(outputs)
