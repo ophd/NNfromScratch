@@ -6,29 +6,73 @@ nnfs.init()
 
 class Layer_Dense:
     def __init__(self, n_inputs, n_neurons):
-        self.weights = 0.10 * np.random.randn(n_inputs, n_neurons)
+        self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
     def forward(self, inputs):
+        ''' forward pass '''
+        self.inputs = inputs
         self.output = np.dot(inputs, self.weights) + self.biases
+    def backward(self, dvalues):
+        ''' backward propagation.
+            input: dvalues  the gradient of the forward layer of neurons
+        '''
+        self.dweights = np.dot(self.inputs.T, dvalues)
+        self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
+        # create the gradient for this layer
+        self.dinputs = np.dot(dvalues, self.weights.T)
 
 class Activation_ReLU:
     ''' Rectified Linear Unit Activation Function '''
     def __init__(self):
         pass
     def forward(self, inputs):
+        self.inputs = inputs
         self.output = np.maximum(0, inputs)
+    def backward(self, dvalues):
+        self.dinputs = dvalues.copy()
+        # ReLU function f(x) = {0, x <=0, x, x > 0}
+        # so its derivative is 0 if the input was zero.
+        self.dinputs[self.inputs <= 0] = 0
 
 class Activation_Softmax:
     def forward(self, inputs):
         ''' calcuate normalized probabilities in the forward pass '''
         exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
         self.output = exp_values / np.sum(exp_values, axis=1, keepdims=True)
+    def backward(self, dvalues):
+        ''' create the gradient vector for backpropagation '''
+        self.dinputs = np.empty_like(dvalues)
+
+        for i, (single_output, single_dvalues) in \
+            enumerate(zip(self.output, dvalues)):
+            single_output = single_output.reshape(-1, 1)
+            jacobian_matrix = np.diagflat(single_output) - \
+                              np.dot(single_output, single_output.T)
+            self.dinputs[i] = np.dot(jacobian_matrix, single_dvalues)
+
+class Activation_Softmax_Loss_CategoricalCrossEntropy():
+    def __init__(self):
+        self.activation = Activation_Softmax()
+        self.loss = Loss_CategoricalCrossEntropy()
+    def forward(self, inputs, y_true):
+        self.activation.forward(inputs)
+        self.output = self.activation.output
+        return self.loss.calculate(self.output, y_true)
+    def backward(self, dvalues, y_true):
+        no_of_samples = len(dvalues)
+        # turn y_true into discrete values if y_true is one-hot encoded
+        if len(y_true.shape) == 2:
+            y_true = np.argmax(y_true, axis=1)
+        
+        self.dinputs = dvalues.copy()
+        self.dinputs[range(no_of_samples), y_true] -= 1
+        self.dinputs = self.dinputs / no_of_samples
 
 class Loss:
-    ''' Common loss class '''
+    ''' Generic loss class '''
     def forward(self, y_pred, y_true):
         raise NotImplementedError
-    def calcuate(self, output, y):
+    def calculate(self, output, y):
         ''' Calculates the data and regularization losses
             given model output and ground-truth values '''
         sample_losses = self.forward(output, y)
@@ -42,6 +86,8 @@ class Loss_CategoricalCrossEntropy(Loss):
         # clipping eliminates 0 and 1 values.
         # clip 0 value to avoid log(0) errors
         # clip 1 to even out the mean from clipping 0
+        # I'm not sure if the latter is entirely necessary since only
+        # 0 is clipped, and by a very small value.
         y_pred_clipped = np.clip(y_pred, 1e-7, 1-1e-7)
 
         # categorical values
@@ -52,26 +98,51 @@ class Loss_CategoricalCrossEntropy(Loss):
             correct_confidences = np.sum(y_pred_clipped * y_true, axis=1)
         # return the loss as the negative log likelihoods
         return -np.log(correct_confidences)
+    def backward(self, dvalues, y_true):
+        no_of_samples = len(dvalues)
+        no_of_labels = len(dvalues[0])
 
-X = [[1, 2, 3, 2.5],
-     [2.0, 5.0, -1.0, 2.0],
-     [-1.5, 2.7, 3.3, -0.8]
-]
+        # transform sparse data to one-hot vectors
+        if len(y_true.shape) == 1:
+            y_true = np.eye(no_of_labels)[y_true]
+        # calculate & normalize gradient
+        self.dinputs = (-y_true / dvalues) / no_of_samples
 
-X, y = spiral_data(100, 3)
 
-layer1 = Layer_Dense(2, 3)
-activation1 = Activation_ReLU()
-layer1.forward(X)
-activation1.forward(layer1.output)
-layer2 = Layer_Dense(3, 3)
-activation2 = Activation_Softmax()
-layer2.forward(activation1.output)
-activation2.forward(layer2.output)
 
-predictions = np.argmax(activation2.output, axis=1)
-if len(y.shape) == 2:
-    y = np.argmax(y, axis=1)
-accuracy = np.mean(predictions == y)
-print('acc:', accuracy)
+if __name__ == '__main__':
+    X = [[1, 2, 3, 2.5],
+        [2.0, 5.0, -1.0, 2.0],
+        [-1.5, 2.7, 3.3, -0.8]
+    ]
 
+    X, y = spiral_data(100, 3)
+
+    dense1 = Layer_Dense(2, 3)
+    dense2 = Layer_Dense(3, 3)
+    activation1 = Activation_ReLU()
+    loss_activation = Activation_Softmax_Loss_CategoricalCrossEntropy()
+
+    dense1.forward(X)
+    activation1.forward(dense1.output)
+    dense2.forward(activation1.output)
+    loss = loss_activation.forward(dense2.output, y)
+    print(loss_activation.output[:5])
+    print('loss:', loss)
+
+    predictions = np.argmax(loss_activation.output, axis=1)
+    if len(y.shape) == 2:
+        y = np.argmax(y, axis=1)
+    accuracy = np.mean(predictions == y)
+    print('acc:', accuracy)
+
+    #backward pass
+    loss_activation.backward(loss_activation.output, y)
+    dense2.backward(loss_activation.dinputs)
+    activation1.backward(dense2.dinputs)
+    dense1.backward(activation1.dinputs)
+
+    print(dense1.dweights)
+    print(dense1.dbiases)
+    print(dense2.dweights)
+    print(dense2.dbiases)
