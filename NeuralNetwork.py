@@ -109,12 +109,21 @@ class Loss_CategoricalCrossEntropy(Loss):
         self.dinputs = (-y_true / dvalues) / no_of_samples
 
 class Optimizer_SGD:
-    def __init__(self, learning_rate=1.0):
+    def __init__(self, learning_rate=1.0, decay=0.0):
         self.learning_rate = learning_rate
+        self.current_learning_rate = learning_rate
+        self.decay = decay
+        self.iterations = 0
+    def pre_update_params(self):
+        if self.decay:
+            self.current_learning_rate = self.learning_rate /\
+                                         (1. + self.decay * self.iterations)
     def update_params(self, layer):
         ''' Updates the parameters for a layer of the network '''
-        layer.weights += -self.learning_rate * layer.dweights
-        layer.biases += self.learning_rate * layer.dbiases
+        layer.weights += -self.current_learning_rate * layer.dweights
+        layer.biases += -self.current_learning_rate * layer.dbiases
+    def post_update_params(self):
+        self.iterations += 1
 
 if __name__ == '__main__':
     X, y = spiral_data(100, 3)
@@ -123,20 +132,23 @@ if __name__ == '__main__':
     dense2 = Layer_Dense(64, 3)
     activation1 = Activation_ReLU()
     loss_activation = Activation_Softmax_Loss_CategoricalCrossEntropy()
+    optimizer = Optimizer_SGD(learning_rate=0.905, decay=9.4e-4)
 
     for epoch in range(10001):
         dense1.forward(X)
         activation1.forward(dense1.output)
         dense2.forward(activation1.output)
         loss = loss_activation.forward(dense2.output, y)
-        print(loss_activation.output[:5])
-        print('loss:', loss)
 
         predictions = np.argmax(loss_activation.output, axis=1)
         if len(y.shape) == 2:
             y = np.argmax(y, axis=1)
         accuracy = np.mean(predictions == y)
-        print('acc:', accuracy)
+        if not epoch % 250:
+            print(f'epoch: {epoch}',
+                  f'\tacc: {accuracy:.3f}',
+                  f'\tloss: {loss:.3f}'
+                  f'\tlr: {optimizer.current_learning_rate:0.6f}')
 
         #backward pass
         loss_activation.backward(loss_activation.output, y)
@@ -144,6 +156,7 @@ if __name__ == '__main__':
         activation1.backward(dense2.dinputs)
         dense1.backward(activation1.dinputs)
 
-        optimizer = Optimizer_SGD()
+        optimizer.pre_update_params()
         optimizer.update_params(dense1)
         optimizer.update_params(dense2)
+        optimizer.post_update_params()
