@@ -109,19 +109,40 @@ class Loss_CategoricalCrossEntropy(Loss):
         self.dinputs = (-y_true / dvalues) / no_of_samples
 
 class Optimizer_SGD:
-    def __init__(self, learning_rate=1.0, decay=0.0):
+    def __init__(self, learning_rate=1.0, decay=0.0, momentum=0.):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
         self.decay = decay
         self.iterations = 0
+        self.momentum = momentum
     def pre_update_params(self):
         if self.decay:
             self.current_learning_rate = self.learning_rate /\
                                          (1. + self.decay * self.iterations)
     def update_params(self, layer):
+        if self.momentum:
+            # create the initial momentums
+            if not hasattr(layer, 'weight_momentums'):
+                layer.weight_momentums = np.zeros_like(layer.weights)
+                layer.bias_momentums = np.zeros_like(layer.biases)
+            # determine the new weight & bias updates by preserving some
+            # of the previous weight & bias updates through the use of momentum
+            weight_updates = \
+                self.momentum * layer.weight_momentums - \
+                self.current_learning_rate * layer.dweights
+            layer.weight_momentums = weight_updates
+            bias_updates = \
+                self.momentum * layer.bias_momentums - \
+                self.current_learning_rate * layer.dbiases
+            layer.bias_momentums = bias_updates
+        else:
+            # weight & bias updates using only current gradient
+            weight_updates += -self.current_learning_rate * layer.dweights
+            bias_updates += -self.current_learning_rate * layer.dbiases
+
         ''' Updates the parameters for a layer of the network '''
-        layer.weights += -self.current_learning_rate * layer.dweights
-        layer.biases += -self.current_learning_rate * layer.dbiases
+        layer.weights += weight_updates
+        layer.biases += bias_updates
     def post_update_params(self):
         self.iterations += 1
 
@@ -132,7 +153,7 @@ if __name__ == '__main__':
     dense2 = Layer_Dense(64, 3)
     activation1 = Activation_ReLU()
     loss_activation = Activation_Softmax_Loss_CategoricalCrossEntropy()
-    optimizer = Optimizer_SGD(learning_rate=0.905, decay=9.4e-4)
+    optimizer = Optimizer_SGD(learning_rate=0.98, decay=1.0e-3, momentum=0.9)
 
     for epoch in range(10001):
         dense1.forward(X)
