@@ -98,10 +98,10 @@ class Loss_CategoricalCrossEntropy(Loss):
             correct_confidences = np.sum(y_pred_clipped * y_true, axis=1)
         # return the loss as the negative log likelihoods
         return -np.log(correct_confidences)
+
     def backward(self, dvalues, y_true):
         no_of_samples = len(dvalues)
         no_of_labels = len(dvalues[0])
-
         # transform sparse data to one-hot vectors
         if len(y_true.shape) == 1:
             y_true = np.eye(no_of_labels)[y_true]
@@ -115,10 +115,12 @@ class Optimizer_SGD:
         self.decay = decay
         self.iterations = 0
         self.momentum = momentum
+        
     def pre_update_params(self):
         if self.decay:
             self.current_learning_rate = self.learning_rate /\
                                          (1. + self.decay * self.iterations)
+                                         
     def update_params(self, layer):
         if self.momentum:
             # create the initial momentums
@@ -143,8 +145,51 @@ class Optimizer_SGD:
         ''' Updates the parameters for a layer of the network '''
         layer.weights += weight_updates
         layer.biases += bias_updates
+
     def post_update_params(self):
         self.iterations += 1
+
+class Optimizer_Adagrad:
+    def __init__(self, learning_rate=1.0, decay=0.0, epsilon=1e-7):
+        self.learning_rate = learning_rate
+        self.current_learning_rate = learning_rate
+        self.decay = decay
+        self.iterations = 0
+        self.epsilon = epsilon
+        
+    def pre_update_params(self):
+        if self.decay:
+            self.current_learning_rate = self.learning_rate /\
+                                         (1. + self.decay * self.iterations)
+                                         
+    def update_params(self, layer):
+        ''' Update parameters using adaptive gradient method. A cache of the
+            weight and bias gradients is kept as a sum of squares of previous
+            gradients.
+        '''
+        # Initialize caches
+        if not hasattr(layer, 'weight_cache'):
+            layer.weight_cache = np.zeros_like(layer.weights)
+            layer.bias_cache = np.zeros_like(layer.biases)
+        
+        # Track sum of square of all gradients used to update model parameters
+        layer.weight_cache += layer.dweights ** 2
+        layer.bias_cache += layer.dbiases ** 2
+
+        # Update model parameters normalize to the square root of the
+        # sum of square of all gradients used (cache)
+        layer.weights += -self.current_learning_rate * layer.dweights / \
+                          (np.sqrt(layer.weight_cache) + self.epsilon)
+        layer.biases += -self.current_learning_rate * layer.dbiases / \
+                         (np.sqrt(layer.bias_cache) + self.epsilon)
+
+    def post_update_params(self):
+        ''' Keep track of number of epochs. This variable is used to update
+            the variable learning rate. This method should be called after
+            any parameter update.
+        '''
+        self.iterations += 1
+
 
 if __name__ == '__main__':
     X, y = spiral_data(100, 3)
