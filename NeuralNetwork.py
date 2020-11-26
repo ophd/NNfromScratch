@@ -88,6 +88,29 @@ class Loss:
         sample_losses = self.forward(output, y)
         data_loss = np.mean(sample_losses)
         return data_loss
+    
+    def regularization_loss(self, layer):
+        ''' This function calculates the loss from L1 & L2 regularization
+            on the weights & biases
+        '''
+        regularization_loss = 0
+        # L1 for weights
+        if layer.weight_regularizer_l1 > 0:
+            regularization_loss += layer.weight_regularizer_l1 * \
+                np.sum(np.abs(layer.weights))
+        # L2 for weights
+        if layer.weight_regularizer_l2 > 0:
+            regularization_loss += layer.weight_regularizer_l2 * \
+                np.sum(layer.weights * layer.weights)
+        # L1 for biases
+        if layer.bias_regularizer_l1 > 0:
+            regularization_loss += layer.bias_regularizer_l1 * \
+                np.sum(np.abs(layer.biases))
+        # L2 for biases
+        if layer.bias_regularizer_l2 > 0:
+            regularization_loss += layer.bias_regularizer_l2 * \
+                np.sum(layer.biases * layer.biases)
+        return regularization_loss
 
 class Loss_CategoricalCrossEntropy(Loss):
     ''' cross-entropy loss '''
@@ -314,6 +337,8 @@ if __name__ == '__main__':
         activation1.forward(dense1.output)
         dense2.forward(activation1.output)
         loss = loss_activation.forward(dense2.output, y)
+        loss += loss_activation.regularization_loss(dense1)
+        loss += loss_activation.regularization_loss(dense2)
 
         predictions = np.argmax(loss_activation.output, axis=1)
         if len(y.shape) == 2:
