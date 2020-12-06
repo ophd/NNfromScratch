@@ -1,15 +1,19 @@
 import numpy as np
 import nnfs
-from nnfs.datasets import spiral_data
+from nnfs.datasets import sine_data
 
 nnfs.init()
+
+class Layer_Input:
+    def forward(self, inputs):
+        self.output = inputs
 
 class Layer_Dense:
     def __init__(self, n_inputs, n_neurons,
                  weight_regularizer_l1=0, weight_regularizer_l2=0,
                  bias_regularizer_l1=0, bias_regularizer_l2=0):
         # init weights & biases
-        self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
+        self.weights = 0.1 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
         # set strength of regularization
         # lambda values for L1 & L2 regularization
@@ -97,7 +101,7 @@ class Activation_Softmax:
 class Activation_Linear:
     def forward(self, inputs):
         self.inputs = inputs
-        self.outputs = inputs
+        self.output = inputs
     def backward(self, dvalues):
         self.dinputs = dvalues.copy()
 
@@ -132,12 +136,16 @@ class Loss:
     ''' Generic loss class '''
     def forward(self, y_pred, y_true):
         raise NotImplementedError
+
+    def remember_trainable_layers(self, trainable_layers):
+        self.trainable_layers = trainable_layers
+    
     def calculate(self, output, y):
         ''' Calculates the data and regularization losses
             given model output and ground-truth values '''
         sample_losses = self.forward(output, y)
         data_loss = np.mean(sample_losses)
-        return data_loss
+        return data_loss, self.regularization_loss()
     
     def regularization_loss(self, layer):
         ''' This function calculates the loss from L1 & L2 regularization
@@ -215,7 +223,7 @@ class Loss_BinaryCrossEntropy(Loss):
         # Normalize the gradient
         self.dinputs = self.dinputs / no_of_samples
 
-class Loss_MeanSquareError(Loss):
+class Loss_MeanSquaredError(Loss):
     def forward(self, y_pred, y_true):
         sample_losses = np.mean((y_true - y_pred)**2, axis=-1)
         return sample_losses
@@ -418,61 +426,76 @@ class Optimizer_Adam:
         self.iterations += 1
 
 
+class Model:
+    ''' generic neural network class
+
+        This class contains the building blocks of a neural network model,
+        including the layers, optimizer, loss function, and training.
+    '''
+    def __init__(self):
+        self.layers = []
+
+    def add(self, layer):
+        ''' adds a layer to the neural network model '''
+        self.layers.append(layer)
+    
+    def set(self, *, loss, optimizer):
+        self.loss = loss
+        self.optimizer = optimizer
+
+    def train(self, X, y, *, epochs=1, print_every=1):
+        for epoch in range(1, epochs+1):
+            output = self.forward(X)
+            print(output)
+            exit()
+    
+    def finalize(self):
+        self.input_layer = Layer_Input()
+        self.trainable_layers = []
+
+        no_of_layers = len(self.layers)
+
+        for i in range(no_of_layers):
+            if i == 0:
+                self.layers[i].prev = self.input_layer
+                self.layers[i].next = self.layers[i+1]
+            elif i < no_of_layers - 1:
+                self.layers[i].prev = self.layers[i-1]
+                self.layers[i].next = self.layers[i+1]
+            else:
+                self.layers[i].prev = self.layers[i-1]
+                self.layers[i].next = self.loss
+            
+            # Gather list of trainable layers
+            # Trainable layers have weights and biases
+            if hasattr(self.layers[i], 'weights'):
+                self.trainable_layers.append(self.layers[i])
+
+    def forward(self, X):
+        ''' Performs a forward pass through the neural network '''
+        self.input_layer.forward(X)
+        
+        for layer in self.layers:
+            layer.forward(layer.prev.output)
+        
+        return layer.output
+
 if __name__ == '__main__':
-    X, y = spiral_data(100, 2)
-    y = y.reshape(-1, 1)
+    X, y = sine_data()
     
-    dense1 = Layer_Dense(2, 64, weight_regularizer_l2=5e-4,
-                         bias_regularizer_l2=5e-4)
-    activation1 = Activation_ReLU()
-    dense2 = Layer_Dense(64, 1)
-    activation2 = Activation_Sigmoid()
-    loss_function = Loss_BinaryCrossEntropy()
-    optimizer = Optimizer_Adam(decay=5e-7)
-    
-    for epoch in range(10001):
-        dense1.forward(X)
-        activation1.forward(dense1.output)
-        dense2.forward(activation1.output)
-        activation2.forward(dense2.output)
+    model = Model()
 
-        data_loss = loss_function.calculate(activation2.output, y)
-        regularization_loss = loss_function.regularization_loss(dense1) + \
-                              loss_function.regularization_loss(dense2)
-        
-        loss = data_loss + regularization_loss
+    model.add(Layer_Dense(1, 64))
+    model.add(Activation_ReLU())
+    model.add(Layer_Dense(64, 64))
+    model.add(Activation_ReLU())
+    model.add(Layer_Dense(64, 1))
+    model.add(Activation_Linear())
 
-        predictions = (activation2.output > 0.5) * 1
-        accuracy = np.mean(predictions == y)
+    model.set(
+        loss=Loss_MeanSquaredError(),
+        optimizer=Optimizer_Adam(learning_rate=0.005, decay=1.e-3)
+    )
 
-        if not epoch % 100:
-            print(f'epoch: {epoch}',
-                  f'acc: {accuracy:.3f}',
-                  f'loss: {loss:.3f} (',
-                  f'data loss: {data_loss:.3f}, ',
-                  f'reg loss: {regularization_loss:.3f})',
-                  f'lr: {optimizer.current_learning_rate}')
-        
-        loss_function.backward(activation2.output, y)
-        activation2.backward(loss_function.dinputs)
-        dense2.backward(activation2.dinputs)
-        activation1.backward(dense2.dinputs)
-        dense1.backward(activation1.dinputs)
-
-        optimizer.pre_update_params()
-        optimizer.update_params(dense1)
-        optimizer.update_params(dense2)
-        optimizer.post_update_params()
-    
-    # Model validation
-    X_test, y_test = spiral_data(samples=100, classes=2)
-    y_test = y_test.reshape(-1, 1)
-    dense1.forward(X_test)
-    activation1.forward(dense1.output)
-    dense2.forward(activation1.output)
-    activation2.forward(dense2.output)
-    loss = loss_function.calculate(activation2.output, y_test)
-    predictions = (activation2.output > 0.5) * 1
-    accuracy = np.mean(predictions == y_test)
-
-    print(f'validation, acc: {accuracy:.3f}, loss: {loss:.3f}')
+    model.finalize()
+    model.train(X, y, epochs=10000, print_every=100)
