@@ -149,6 +149,16 @@ class Activation_Softmax_Loss_CategoricalCrossEntropy():
         self.dinputs[range(no_of_samples), y_true] -= 1
         self.dinputs = self.dinputs / no_of_samples
 
+
+class Accuracy:
+    ''' Base class for prediction accuracy '''
+    def calculate(self, predictions, y):
+        ''' calculate prediction accuracy given predictions and ground-truth
+        values '''
+        comparisons = self.compare(predictions, y)
+        accuracy = np.mean(comparisons)
+        return accuracy
+
 class Loss:
     ''' Generic loss class '''
     def forward(self, y_pred, y_true):
