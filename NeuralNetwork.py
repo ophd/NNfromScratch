@@ -482,13 +482,23 @@ class Model:
         ''' adds a layer to the neural network model '''
         self.layers.append(layer)
     
-    def set(self, *, loss, optimizer):
+    def set(self, *, loss, optimizer, accuracy):
         self.loss = loss
         self.optimizer = optimizer
+        self.accuracy = accuracy
 
     def train(self, X, y, *, epochs=1, print_every=1):
+        self.accuracy.init(y)
+        
         for epoch in range(1, epochs+1):
             output = self.forward(X)
+
+            data_loss, regularization_loss = self.loss.calculate(output, y)
+            loss = data_loss + regularization_loss
+
+            predictions = self.output_layer_activation.predictions(output)
+            accuracy = self.accuracy.calcuate(predictions, y)
+            
             print(output)
             exit()
     
