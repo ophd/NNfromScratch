@@ -73,14 +73,19 @@ class Activation_ReLU:
     ''' Rectified Linear Unit Activation Function '''
     def __init__(self):
         pass
+
     def forward(self, inputs):
         self.inputs = inputs
         self.output = np.maximum(0, inputs)
+        
     def backward(self, dvalues):
         self.dinputs = dvalues.copy()
         # ReLU function f(x) = {0, x <=0, x, x > 0}
         # so its derivative is 0 if the input was zero.
         self.dinputs[self.inputs <= 0] = 0
+
+    def predictions(self, outputs):
+        return outputs
 
 class Activation_Softmax:
     def forward(self, inputs):
