@@ -524,6 +524,7 @@ class Model:
             # Trainable layers have weights and biases
             if hasattr(self.layers[i], 'weights'):
                 self.trainable_layers.append(self.layers[i])
+        self.loss.remember_trainable_layers(self.trainable_layers)
 
     def forward(self, X):
         ''' Performs a forward pass through the neural network '''
