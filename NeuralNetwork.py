@@ -154,13 +154,25 @@ class Accuracy:
     ''' Base class for prediction accuracy '''
     def compare(self):
         raise NotImplementedError
-    
+
     def calculate(self, predictions, y):
         ''' calculate prediction accuracy given predictions and ground-truth
         values '''
         comparisons = self.compare(predictions, y)
         accuracy = np.mean(comparisons)
         return accuracy
+
+class Accuracy_Regression(Accuracy):
+    ''' Accuracy calculations for a regression model '''
+    def __init__(self):
+        self.precision = None
+
+    def init(self, y, reinit=False):
+        if self.precision is None or reinit:
+            self.precision = np.std(y) / 250
+
+    def compare(self, predictions, y):
+        return np.absolute(predictions - y) < self.precision
 
 class Loss:
     ''' Generic loss class '''
