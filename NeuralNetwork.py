@@ -498,9 +498,22 @@ class Model:
 
             predictions = self.output_layer_activation.predictions(output)
             accuracy = self.accuracy.calcuate(predictions, y)
-            
-            print(output)
-            exit()
+
+            self.backward(output, y)
+
+            self.optimizer.pre_update_params()
+            for layer in self.trainable_layers:
+                self.optimizer.update_params(layer)            
+            self.optimizer.post_update_params()
+
+            if not epoch % print_every:
+                print(f'epoch: {epoch}',
+                      f'acc: {accuracy:.3f}',
+                      f'loss: {loss:.3f} (',
+                      f'data loss: {data_loss:.3f},',
+                      f'reg loss: {regularization_loss:.3f})',
+                      f'lr: {self.optimizer.current_learning_rate}'
+                )
     
     def finalize(self):
         self.input_layer = Layer_Input()
@@ -534,6 +547,12 @@ class Model:
             layer.forward(layer.prev.output)
         
         return layer.output
+
+    def backward(self, output, y):
+        self.loss.backward(output, y)
+
+        for layer in reversed(self, layers):
+            layer.backward(layer.next.dinputs)
 
 if __name__ == '__main__':
     X, y = sine_data()
