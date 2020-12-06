@@ -152,6 +152,9 @@ class Activation_Softmax_Loss_CategoricalCrossEntropy():
 
 class Accuracy:
     ''' Base class for prediction accuracy '''
+    def compare(self):
+        raise NotImplementedError
+    
     def calculate(self, predictions, y):
         ''' calculate prediction accuracy given predictions and ground-truth
         values '''
