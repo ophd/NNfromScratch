@@ -117,12 +117,14 @@ class Activation_Sigmoid:
     def backward(self, dvalues):
         self.dinputs = dvalues * (1 - self.output) * self.output
 
+    def predictions(self, outputs):
+        return (outputs > 0.5) * 1
 
 class Activation_Softmax_Loss_CategoricalCrossEntropy():
     def __init__(self):
         self.activation = Activation_Softmax()
         self.loss = Loss_CategoricalCrossEntropy()
-        
+
     def forward(self, inputs, y_true):
         self.activation.forward(inputs)
         self.output = self.activation.output
