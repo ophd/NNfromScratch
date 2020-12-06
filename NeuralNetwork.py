@@ -87,6 +87,7 @@ class Activation_Softmax:
         ''' calcuate normalized probabilities in the forward pass '''
         exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
         self.output = exp_values / np.sum(exp_values, axis=1, keepdims=True)
+
     def backward(self, dvalues):
         ''' create the gradient vector for backpropagation '''
         self.dinputs = np.empty_like(dvalues)
@@ -97,6 +98,9 @@ class Activation_Softmax:
             jacobian_matrix = np.diagflat(single_output) - \
                               np.dot(single_output, single_output.T)
             self.dinputs[i] = np.dot(jacobian_matrix, single_dvalues)
+    
+    def predictions(self, outputs):
+        return np.argmax(outputs, axis=1)
 
 class Activation_Linear:
     def forward(self, inputs):
@@ -118,10 +122,12 @@ class Activation_Softmax_Loss_CategoricalCrossEntropy():
     def __init__(self):
         self.activation = Activation_Softmax()
         self.loss = Loss_CategoricalCrossEntropy()
+        
     def forward(self, inputs, y_true):
         self.activation.forward(inputs)
         self.output = self.activation.output
         return self.loss.calculate(self.output, y_true)
+        
     def backward(self, dvalues, y_true):
         no_of_samples = len(dvalues)
         # turn y_true into discrete values if y_true is one-hot encoded
