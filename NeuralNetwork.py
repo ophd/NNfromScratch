@@ -1,11 +1,11 @@
 import numpy as np
 import nnfs
-from nnfs.datasets import sine_data
+from nnfs.datasets import sine_data, spiral_data
 
 nnfs.init()
 
 class Layer_Input:
-    def forward(self, inputs):
+    def forward(self, inputs, training):
         self.output = inputs
 
 class Layer_Dense:
@@ -13,7 +13,7 @@ class Layer_Dense:
                  weight_regularizer_l1=0, weight_regularizer_l2=0,
                  bias_regularizer_l1=0, bias_regularizer_l2=0):
         # init weights & biases
-        self.weights = 0.1 * np.random.randn(n_inputs, n_neurons)
+        self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
         # set strength of regularization
         # lambda values for L1 & L2 regularization
@@ -22,7 +22,7 @@ class Layer_Dense:
         self.bias_regularizer_l1 = bias_regularizer_l1
         self.bias_regularizer_l2 = bias_regularizer_l2
 
-    def forward(self, inputs):
+    def forward(self, inputs, training):
         ''' forward pass '''
         self.inputs = inputs
         self.output = np.dot(inputs, self.weights) + self.biases
@@ -59,8 +59,13 @@ class Layer_Dropout:
         '''
         self.rate = 1 - rate
     
-    def forward(self, inputs):
+    def forward(self, inputs, training):
         self.inputs = inputs
+
+        if not training:
+            self.output = inputs.copy()
+            return
+
         self.binary_mask = np.random.binomial(1, self.rate, size=inputs.shape) \
                            / self.rate
         self.output = inputs * self.binary_mask
@@ -74,7 +79,7 @@ class Activation_ReLU:
     def __init__(self):
         pass
 
-    def forward(self, inputs):
+    def forward(self, inputs, training):
         self.inputs = inputs
         self.output = np.maximum(0, inputs)
         
@@ -93,7 +98,7 @@ class Activation_Softmax:
         exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
         self.output = exp_values / np.sum(exp_values, axis=1, keepdims=True)
 
-    def backward(self, dvalues):
+    def backward(self, dvalues, training):
         ''' create the gradient vector for backpropagation '''
         self.dinputs = np.empty_like(dvalues)
 
@@ -108,7 +113,7 @@ class Activation_Softmax:
         return np.argmax(outputs, axis=1)
 
 class Activation_Linear:
-    def forward(self, inputs):
+    def forward(self, inputs, training):
         self.inputs = inputs
         self.output = inputs
 
@@ -119,7 +124,7 @@ class Activation_Linear:
         return outputs
 
 class Activation_Sigmoid:
-    def forward(self, inputs):
+    def forward(self, inputs, training):
         self.inputs = inputs
         self.output = 1 / (1 + np.exp(-inputs))
     
@@ -511,7 +516,7 @@ class Model:
         self.accuracy.init(y)
         
         for epoch in range(1, epochs+1):
-            output = self.forward(X)
+            output = self.forward(X, training=True)
 
             data_loss, regularization_loss = \
                 self.loss.calculate(output, y, include_regularization=True)
@@ -535,15 +540,15 @@ class Model:
                       f'reg loss: {regularization_loss:.3f})',
                       f'lr: {self.optimizer.current_learning_rate}'
                 )
-            if validation_data is not None:
-                X_val, y_val = validation_data
+        if validation_data is not None:
+            X_val, y_val = validation_data
 
-                output = self.forward(X_val)
-                loss = self.loss.calculate(output, y_val)
-                predictions = self.output_layer_activation.predictions(output)
-                accuracy = self.accuracy.calculate(predictions, y_val)
+            output = self.forward(X_val, training=False)
+            loss = self.loss.calculate(output, y_val)
+            predictions = self.output_layer_activation.predictions(output)
+            accuracy = self.accuracy.calculate(predictions, y_val)
 
-                print(f'validation: acc: {accuracy:.3f}, loss: {loss:.3f}')
+            print(f'validation: acc: {accuracy:.3f}, loss: {loss:.3f}')
     
     def finalize(self):
         self.input_layer = Layer_Input()
@@ -569,12 +574,12 @@ class Model:
                 self.trainable_layers.append(self.layers[i])
         self.loss.remember_trainable_layers(self.trainable_layers)
 
-    def forward(self, X):
+    def forward(self, X, training):
         ''' Performs a forward pass through the neural network '''
-        self.input_layer.forward(X)
+        self.input_layer.forward(X, training)
         
         for layer in self.layers:
-            layer.forward(layer.prev.output)
+            layer.forward(layer.prev.output, training)
         
         return layer.output
 
@@ -585,22 +590,25 @@ class Model:
             layer.backward(layer.next.dinputs)
 
 if __name__ == '__main__':
-    X, y = sine_data()
+    X, y = spiral_data(samples=100, classes=2)
+    X_test, y_test = spiral_data(samples=100, classes=2)
+
+    y = y.reshape(-1, 1)
+    y_test = y_test.reshape(-1, 1)
     
     model = Model()
 
-    model.add(Layer_Dense(1, 64))
-    model.add(Activation_ReLU())
-    model.add(Layer_Dense(64, 64))
+    model.add(Layer_Dense(2, 64, weight_regularizer_l2=5e-4, bias_regularizer_l2=5e-4))
     model.add(Activation_ReLU())
     model.add(Layer_Dense(64, 1))
-    model.add(Activation_Linear())
+    model.add(Activation_Sigmoid())
 
     model.set(
-        loss=Loss_MeanSquaredError(),
-        optimizer=Optimizer_Adam(learning_rate=0.005, decay=1e-3),
-        accuracy=Accuracy_Regression()
+        loss=Loss_BinaryCrossEntropy(),
+        optimizer=Optimizer_Adam(decay=5e-7),
+        accuracy=Accuracy_Categorical(binary=True)
     )
 
     model.finalize()
-    model.train(X, y, epochs=10000, print_every=100)
+    model.train(X, y, validation_data=(X_test, y_test), 
+        epochs=10000, print_every=100)
