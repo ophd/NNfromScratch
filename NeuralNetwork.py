@@ -198,11 +198,15 @@ class Loss:
     def remember_trainable_layers(self, trainable_layers):
         self.trainable_layers = trainable_layers
     
-    def calculate(self, output, y):
+    def calculate(self, output, y, *, include_regularization=False):
         ''' Calculates the data and regularization losses
             given model output and ground-truth values '''
         sample_losses = self.forward(output, y)
         data_loss = np.mean(sample_losses)
+
+        if not include_regularization:
+            return data_loss
+        
         return data_loss, self.regularization_loss()
     
     def regularization_loss(self):
