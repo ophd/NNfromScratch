@@ -174,6 +174,22 @@ class Accuracy_Regression(Accuracy):
     def compare(self, predictions, y):
         return np.absolute(predictions - y) < self.precision
 
+class Accuracy_Categorical(Accuracy):
+    ''' Accuracy for a classifical model '''
+    def __init__(self, *, binary=False):
+        self.binary = binary
+    
+    def init(self, y):
+        ''' this function is not needed for this model type but
+            needs to exist to avoid throwing and exception
+        '''
+        pass
+
+    def compare(self, predictions, y):
+        if not self.binary and len(y.shape) == 2:
+            y = np.argmax(y, axis=1)
+        return predictions == y
+
 class Loss:
     ''' Generic loss class '''
     def forward(self, y_pred, y_true):
@@ -189,7 +205,7 @@ class Loss:
         data_loss = np.mean(sample_losses)
         return data_loss, self.regularization_loss()
     
-    def regularization_loss(self, layer):
+    def regularization_loss(self):
         ''' This function calculates the loss from L1 & L2 regularization
             on the weights & biases
         '''
@@ -497,7 +513,7 @@ class Model:
             loss = data_loss + regularization_loss
 
             predictions = self.output_layer_activation.predictions(output)
-            accuracy = self.accuracy.calcuate(predictions, y)
+            accuracy = self.accuracy.calculate(predictions, y)
 
             self.backward(output, y)
 
@@ -551,7 +567,7 @@ class Model:
     def backward(self, output, y):
         self.loss.backward(output, y)
 
-        for layer in reversed(self, layers):
+        for layer in reversed(self.layers):
             layer.backward(layer.next.dinputs)
 
 if __name__ == '__main__':
@@ -568,7 +584,8 @@ if __name__ == '__main__':
 
     model.set(
         loss=Loss_MeanSquaredError(),
-        optimizer=Optimizer_Adam(learning_rate=0.005, decay=1.e-3)
+        optimizer=Optimizer_Adam(learning_rate=0.005, decay=1e-3),
+        accuracy=Accuracy_Regression()
     )
 
     model.finalize()
