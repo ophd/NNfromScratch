@@ -513,7 +513,8 @@ class Model:
         for epoch in range(1, epochs+1):
             output = self.forward(X)
 
-            data_loss, regularization_loss = self.loss.calculate(output, y)
+            data_loss, regularization_loss = \
+                self.loss.calculate(output, y, include_regularization=True)
             loss = data_loss + regularization_loss
 
             predictions = self.output_layer_activation.predictions(output)
