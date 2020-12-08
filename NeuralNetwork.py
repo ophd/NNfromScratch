@@ -506,6 +506,7 @@ class Model:
     def add(self, layer):
         ''' adds a layer to the neural network model '''
         self.layers.append(layer)
+        self.softmax_classifier_output = None
     
     def set(self, *, loss, optimizer, accuracy):
         self.loss = loss
@@ -574,6 +575,14 @@ class Model:
                 self.trainable_layers.append(self.layers[i])
         self.loss.remember_trainable_layers(self.trainable_layers)
 
+        # if output activation is Softmax and the loss function is 
+        # Categorical Cross-Entropy, we can use an optimized method
+        # to calculate the gradient
+        if isinstance(self.layers[-1], Activation_Softmax) and \
+           isinstance(self.loss, Loss_CategoricalCrossEntropy):
+           self.softmax_classifier_output = \
+               Activation_Softmax_Loss_CategoricalCrossEntropy()
+
     def forward(self, X, training):
         ''' Performs a forward pass through the neural network '''
         self.input_layer.forward(X, training)
@@ -584,6 +593,18 @@ class Model:
         return layer.output
 
     def backward(self, output, y):
+
+        if self.softmax_classifier_output is not None:
+            # Using the combined Softmax activation and cross-entropy loss
+            # for efficiency, the backward method of the last layer (softmax
+            # activation) is not used and dinputs must be set manually for
+            # the last activation layer.
+            self.softmax_classifier_output.backward(output, y)
+            self.layers[-1].dinputs = self.softmax_classifier_output.dinputs
+
+            for layer in reversed(self.layers[:-1]):
+                layer.backward(layer.next.dinputs)
+            return
         self.loss.backward(output, y)
 
         for layer in reversed(self.layers):
