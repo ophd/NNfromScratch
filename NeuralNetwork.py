@@ -93,7 +93,8 @@ class Activation_ReLU:
         return outputs
 
 class Activation_Softmax:
-    def forward(self, inputs):
+    def forward(self, inputs, training):
+        self.inputs = inputs
         ''' calcuate normalized probabilities in the forward pass '''
         exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
         self.output = exp_values / np.sum(exp_values, axis=1, keepdims=True)
@@ -135,14 +136,14 @@ class Activation_Sigmoid:
         return (outputs > 0.5) * 1
 
 class Activation_Softmax_Loss_CategoricalCrossEntropy():
-    def __init__(self):
-        self.activation = Activation_Softmax()
-        self.loss = Loss_CategoricalCrossEntropy()
+    # def __init__(self):
+    #     self.activation = Activation_Softmax()
+    #     self.loss = Loss_CategoricalCrossEntropy()
 
-    def forward(self, inputs, y_true):
-        self.activation.forward(inputs)
-        self.output = self.activation.output
-        return self.loss.calculate(self.output, y_true)
+    # def forward(self, inputs, y_true):
+    #     self.activation.forward(inputs)
+    #     self.output = self.activation.output
+    #     return self.loss.calculate(self.output, y_true)
         
     def backward(self, dvalues, y_true):
         no_of_samples = len(dvalues)
@@ -611,23 +612,21 @@ class Model:
             layer.backward(layer.next.dinputs)
 
 if __name__ == '__main__':
-    X, y = spiral_data(samples=100, classes=2)
-    X_test, y_test = spiral_data(samples=100, classes=2)
+    X, y = spiral_data(samples=1000, classes=3)
+    X_test, y_test = spiral_data(samples=100, classes=3)
 
-    y = y.reshape(-1, 1)
-    y_test = y_test.reshape(-1, 1)
-    
     model = Model()
 
-    model.add(Layer_Dense(2, 64, weight_regularizer_l2=5e-4, bias_regularizer_l2=5e-4))
+    model.add(Layer_Dense(2, 512, weight_regularizer_l2=5e-4, bias_regularizer_l2=5e-4))
     model.add(Activation_ReLU())
-    model.add(Layer_Dense(64, 1))
-    model.add(Activation_Sigmoid())
+    model.add(Layer_Dropout(0.1))
+    model.add(Layer_Dense(512, 3))
+    model.add(Activation_Softmax())
 
     model.set(
-        loss=Loss_BinaryCrossEntropy(),
-        optimizer=Optimizer_Adam(decay=5e-7),
-        accuracy=Accuracy_Categorical(binary=True)
+        loss=Loss_CategoricalCrossEntropy(),
+        optimizer=Optimizer_Adam(learning_rate=0.05, decay=5e-5),
+        accuracy=Accuracy_Categorical()
     )
 
     model.finalize()
