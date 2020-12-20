@@ -1,3 +1,5 @@
 .venv
 .vscode
 create_data.py
+fashion_*
+*.png
