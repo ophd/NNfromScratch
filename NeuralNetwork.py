@@ -1,5 +1,6 @@
 import numpy as np
 import nnfs
+import pickle
 from analyse_fashion_MNIST import create_data_mnist
 from nnfs.datasets import sine_data, spiral_data
 
@@ -22,6 +23,15 @@ class Layer_Dense:
         self.weight_regularizer_l2 = weight_regularizer_l2
         self.bias_regularizer_l1 = bias_regularizer_l1
         self.bias_regularizer_l2 = bias_regularizer_l2
+    
+    def get_parameters(self):
+        ''' retrieves the parameters of the dense layer. '''
+        return self.weights, self.biases
+    
+    def set_parameters(self, weights, biases):
+        ''' sets the parameters of the dense layers. '''
+        self.weights = weights
+        self.biases = biases
 
     def forward(self, inputs, training):
         ''' forward pass '''
@@ -52,7 +62,7 @@ class Layer_Dense:
         
         # create the gradient for this layer
         self.dinputs = np.dot(dvalues, self.weights.T)
-
+    
 class Layer_Dropout:
     def __init__(self, rate):
         ''' input is dropout rate, but it is saved in the layer
@@ -539,10 +549,33 @@ class Model:
         self.layers.append(layer)
         self.softmax_classifier_output = None
     
-    def set(self, *, loss, optimizer, accuracy):
-        self.loss = loss
-        self.optimizer = optimizer
-        self.accuracy = accuracy
+    def set(self, *, loss=None, optimizer=None, accuracy=None):
+        if loss is not None:
+            self.loss = loss
+        if optimizer is not None:
+            self.optimizer = optimizer
+        if accuracy is not None:
+            self.accuracy = accuracy
+    
+    def get_parameters(self):
+        ''' Retrieves parameters for all deep layers of the model '''
+        parameters = [layer.get_parameters() for layer in self.trainable_layers]
+        return parameters
+    
+    def set_parameters(self, parameters):
+        ''' Sets the parameters for all deep layers of the model. '''
+        for parameter_set, layer in zip(parameters, self.trainable_layers):
+            layer.set_parameters(*parameter_set)
+    
+    def save_parameters(self, path):
+        ''' Saves model parameters to file using pickling '''
+        with open(path, 'wb') as f:
+            pickle.dump(self.get_parameters(), f)
+
+    def load_parameters(self, path):
+        ''' Loads model parameters from file '''
+        with open(path, 'rb') as f:
+            self.set_parameters(pickle.load(f))
 
     def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, 
               validation_data=None):
@@ -679,7 +712,9 @@ class Model:
             # Trainable layers have weights and biases
             if hasattr(self.layers[i], 'weights'):
                 self.trainable_layers.append(self.layers[i])
-        self.loss.remember_trainable_layers(self.trainable_layers)
+
+        if self.loss is not None:
+            self.loss.remember_trainable_layers(self.trainable_layers)
 
         # if output activation is Softmax and the loss function is 
         # Categorical Cross-Entropy, we can use an optimized method
@@ -746,4 +781,25 @@ if __name__ == '__main__':
     model.train(X, y, validation_data=(X_test, y_test),
                 epochs=10, batch_size=128, print_every=100)
 
+    model.evaluate(X_test, y_test)
+
+    parameters = model.get_parameters()
+
+    # New Model
+    model = Model()
+
+    model.add(Layer_Dense(X.shape[1], 128))
+    model.add(Activation_ReLU())
+    model.add(Layer_Dense(128, 128))
+    model.add(Activation_ReLU())
+    model.add(Layer_Dense(128, 10))
+    model.add(Activation_Softmax())
+
+    model.set(
+        loss=Loss_CategoricalCrossEntropy(),
+        accuracy=Accuracy_Categorical()
+    )
+
+    model.finalize()
+    model.set_parameters(parameters)
     model.evaluate(X_test, y_test)
