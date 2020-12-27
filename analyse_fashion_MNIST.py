@@ -6,13 +6,13 @@ import os
 nnfs.init()
 
 def load_mnist_dataset(dataset, path):
-    labels = os.listdir(os.path.join(path, dataset)
+    labels = os.listdir(os.path.join(path, dataset))
     X = []
     y = []
 
     for label in labels:
         for file in os.listdir(os.path.join(path, dataset, label)):
-            image = cv2.imread(os.path.join(path, datset, label, file),
+            image = cv2.imread(os.path.join(path, dataset, label, file),
                                cv2.IMREAD_UNCHANGED)
             X.append(image)
             y.append(label)
@@ -23,7 +23,7 @@ def create_data_mnist(path):
     X, y = load_mnist_dataset('train', path)
     X_test, y_test = load_mnist_dataset('test', path)
 
-    return X, y, X_train, y_train
+    return X, y, X_test, y_test
 
 if __name__ == '__main__':
     # Parameters
@@ -43,4 +43,4 @@ if __name__ == '__main__':
     # Shuffle training data set
     keys = np.array(range(X.shape[0]))
     np.random.shuffle(keys)
-    X, y = X[keyss], y[keys]
+    X, y = X[keys], y[keys]
