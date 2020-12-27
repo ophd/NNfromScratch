@@ -3,3 +3,4 @@
 create_data.py
 fashion_*
 *.png
+__pycache__
