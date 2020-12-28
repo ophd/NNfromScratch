@@ -1,6 +1,7 @@
 import numpy as np
 import nnfs
 import pickle
+import copy
 from analyse_fashion_MNIST import create_data_mnist
 from nnfs.datasets import sine_data, spiral_data
 
@@ -576,6 +577,31 @@ class Model:
         ''' Loads model parameters from file '''
         with open(path, 'rb') as f:
             self.set_parameters(pickle.load(f))
+    
+    def save(self, path):
+        ''' Saves a copy of the model. '''
+        model = copy.deepcopy(self)
+        # reset accumulated values from loss & accuracy objects
+        model.loss.new_pass()
+        model.accuracy.new_pass()
+        # reset input layer & gradients from the loss object
+        model.input_layer.__dict__.pop('output', None)
+        model.loss.__dict__.pop('dinputs', None)
+        # reset inputs, outputs, and gradients from all layers
+        for layer in model.layers:
+            for property in ['inputs', 'output', 'dinputs', 
+                             'dweights', 'dbiases']:
+                layer.__dict__.pop(property, None)
+        # Save model to file
+        with open(path, 'wb') as f:
+            pickle.dump(model, f)
+    
+    @staticmethod
+    def load(path):
+        ''' Loads a saved model from file. '''
+        with open(path, 'rb') as f:
+            model = pickle.load(f)
+        return model
 
     def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, 
               validation_data=None):
@@ -761,45 +787,49 @@ if __name__ == '__main__':
     X = (X.reshape(X.shape[0], -1).astype(np.float32) - 127.5) / 127.5
     X_test = (X_test.reshape(X_test.shape[0], -1).astype(np.float32) - 127.5) / 127.5
 
-    model = Model()
-
-    model.add(Layer_Dense(X.shape[1], 128))
-    model.add(Activation_ReLU())
-    model.add(Layer_Dense(128, 128))
-    model.add(Activation_ReLU())
-    model.add(Layer_Dense(128, 10))
-    model.add(Activation_Softmax())
-
-    model.set(
-        loss=Loss_CategoricalCrossEntropy(),
-        optimizer=Optimizer_Adam(decay=1e-3),
-        accuracy=Accuracy_Categorical()
-    )
-
-    model.finalize()
-
-    model.train(X, y, validation_data=(X_test, y_test),
-                epochs=10, batch_size=128, print_every=100)
-
+    model = Model.load('fashion_mnist.model')
     model.evaluate(X_test, y_test)
+    # model = Model()
 
-    parameters = model.get_parameters()
+    # model.add(Layer_Dense(X.shape[1], 128))
+    # model.add(Activation_ReLU())
+    # model.add(Layer_Dense(128, 128))
+    # model.add(Activation_ReLU())
+    # model.add(Layer_Dense(128, 10))
+    # model.add(Activation_Softmax())
 
-    # New Model
-    model = Model()
+    # model.set(
+    #     loss=Loss_CategoricalCrossEntropy(),
+    #     optimizer=Optimizer_Adam(decay=1e-3),
+    #     accuracy=Accuracy_Categorical()
+    # )
 
-    model.add(Layer_Dense(X.shape[1], 128))
-    model.add(Activation_ReLU())
-    model.add(Layer_Dense(128, 128))
-    model.add(Activation_ReLU())
-    model.add(Layer_Dense(128, 10))
-    model.add(Activation_Softmax())
+    # model.finalize()
 
-    model.set(
-        loss=Loss_CategoricalCrossEntropy(),
-        accuracy=Accuracy_Categorical()
-    )
+    # model.train(X, y, validation_data=(X_test, y_test),
+    #             epochs=10, batch_size=128, print_every=100)
 
-    model.finalize()
-    model.set_parameters(parameters)
-    model.evaluate(X_test, y_test)
+    # model.evaluate(X_test, y_test)
+
+    # parameters = model.get_parameters()
+
+    # # New Model
+    # model = Model()
+
+    # model.add(Layer_Dense(X.shape[1], 128))
+    # model.add(Activation_ReLU())
+    # model.add(Layer_Dense(128, 128))
+    # model.add(Activation_ReLU())
+    # model.add(Layer_Dense(128, 10))
+    # model.add(Activation_Softmax())
+
+    # model.set(
+    #     loss=Loss_CategoricalCrossEntropy(),
+    #     accuracy=Accuracy_Categorical()
+    # )
+
+    # model.finalize()
+    # model.set_parameters(parameters)
+    # model.evaluate(X_test, y_test)
+
+    # model.save('fashion_mnist.model')
