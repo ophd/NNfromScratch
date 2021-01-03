@@ -777,7 +777,43 @@ class Model:
         for layer in reversed(self.layers):
             layer.backward(layer.next.dinputs)
 
+            
+    def predict(self, X, *, batch_size=None):
+        ''' Given an array of inputs, this method predicts an
+            output using the trained model.
+        '''
+        prediction_steps = 1
+
+        if batch_size is not None:
+            prediction_steps = len(X) // batch_size
+            if prediction_steps * batch_size < len(X):
+                prediction_steps += 1
+        
+        output = []
+
+        for step in range(prediction_steps):
+            if batch_size is None:
+                batch_X = X
+            else:
+                batch_X = X[step*batch_size:(step+1)*batch_size]
+            
+            batch_output = self.forward(batch_X, training=False)
+            output.append(batch_output)
+        return np.vstack(output)
+
 if __name__ == '__main__':
+    fashion_mnist_labels = {
+        0: 'T-shirt/top',
+        1: 'Trousers',
+        2: 'Pullover',
+        3: 'Dress',
+        4: 'Coat',
+        5: 'Sandal',
+        6: 'Shirt',
+        7: 'Sneaker',
+        8: 'Bag',
+        9: 'Ankle boot'
+    }
     X, y, X_test, y_test = create_data_mnist('fashion_mnist_images')
 
     keys = np.array(range(X.shape[0]))
@@ -788,7 +824,12 @@ if __name__ == '__main__':
     X_test = (X_test.reshape(X_test.shape[0], -1).astype(np.float32) - 127.5) / 127.5
 
     model = Model.load('fashion_mnist.model')
-    model.evaluate(X_test, y_test)
+    confidences = model.predict(X_test[:5])
+    predictions = model.output_layer_activation.predictions(confidences)
+    
+    for prediction in predictions:
+        print(fashion_mnist_labels[prediction])
+    # model.evaluate(X_test, y_test)
     # model = Model()
 
     # model.add(Layer_Dense(X.shape[1], 128))
